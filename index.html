@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Eventos ADAS · Petrosar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+/* =================== CONFIGURACIÓN VISUAL =================== */
+:root{
+  --fondo:#EEF0F1; --superficie:#FFFFFF; --texto:#2B3238; --suave:#5F6A72;
+  --borde:#CBD1D5; --asfalto:#2B3238; --sobre-asfalto:#F2F4F5;
+  --linea:#D9A21B; --real:#B8322A; --fp:#2F7A6D; --pend:#8A949C;
+  --real-bg:#F6E3E1; --fp-bg:#DDEEEA; --pend-bg:#E7EAEC;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root{ --fondo:#1A1F23; --superficie:#232A2F; --texto:#E6E9EB; --suave:#A3ADB4;
+    --borde:#3A434A; --asfalto:#11161A; --real-bg:#3B2422; --fp-bg:#1F3531; --pend-bg:#2E353A; }
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0;height:100%}
+body{background:var(--fondo);color:var(--texto);font-family:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--linea);outline-offset:2px}
+.num{font-family:'Barlow Condensed','Barlow',sans-serif;font-variant-numeric:tabular-nums}
+
+/* Barra superior */
+header{background:var(--asfalto);color:var(--sobre-asfalto);display:flex;align-items:center;gap:24px;padding:0 20px;min-height:56px;flex-wrap:wrap;
+  border-bottom:4px dashed var(--linea)}
+header h1{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;margin:0;letter-spacing:.01em}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{background:none;border:0;color:#C9D0D5;padding:16px 12px;cursor:pointer;font-weight:500;border-bottom:3px solid transparent;margin-bottom:-4px}
+nav button[aria-selected="true"]{color:#fff;border-bottom-color:var(--linea)}
+.usuario{margin-left:auto;display:flex;gap:12px;align-items:center;font-size:13px;color:#C9D0D5}
+.usuario button{background:none;border:1px solid #5A646B;color:#fff;border-radius:4px;padding:4px 10px;cursor:pointer}
+
+main{max-width:1280px;margin:0 auto;padding:24px 20px 60px}
+section[hidden]{display:none}
+
+/* Controles */
+.barra{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.fecha-nav{display:flex;align-items:center;border:1px solid var(--borde);border-radius:6px;background:var(--superficie)}
+.fecha-nav button{background:none;border:0;padding:8px 12px;cursor:pointer;font-size:16px}
+.fecha-nav input{border:0;background:none;padding:8px 4px;font-weight:600}
+.fecha-titulo{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:600;margin:0 8px 0 0;text-transform:capitalize}
+.btn{border:1px solid var(--borde);background:var(--superficie);border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--suave)}
+.btn-primario{background:var(--linea);border-color:var(--linea);color:#1F2327;font-weight:600}
+.btn-primario:hover{filter:brightness(.95);border-color:var(--linea)}
+.derecha{margin-left:auto}
+label.campo{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--suave);font-weight:500}
+input[type=text],input[type=date],input[type=time],input[type=email],input[type=password],select,textarea{
+  border:1px solid var(--borde);border-radius:6px;padding:8px 10px;background:var(--superficie);color:var(--texto);min-width:0}
+textarea{resize:vertical;min-height:60px}
+
+/* Ruta de progreso del día */
+.ruta{background:var(--superficie);border:1px solid var(--borde);border-radius:8px;padding:16px 18px;margin-bottom:18px}
+.ruta-datos{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:12px}
+.dato b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:30px;line-height:1;font-weight:600}
+.dato span{font-size:13px;color:var(--suave)}
+.dato.real b{color:var(--real)} .dato.fp b{color:var(--fp)} .dato.pend b{color:var(--pend)}
+.carril{display:flex;height:22px;border-radius:4px;overflow:hidden;background:var(--pend-bg)}
+.carril div{height:100%;transition:width .4s ease}
+.carril .s-real{background:var(--real)} .carril .s-fp{background:var(--fp)}
+.carril .s-pend{background:var(--asfalto);background-image:linear-gradient(90deg,var(--linea) 0 18px,transparent 18px 32px);background-size:32px 3px;background-repeat:repeat-x;background-position:0 center}
+@media (prefers-reduced-motion:reduce){.carril div{transition:none}}
+
+/* Tablas */
+.tabla-wrap{overflow-x:auto;background:var(--superficie);border:1px solid var(--borde);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-weight:600;color:var(--suave);font-size:13px;padding:10px 12px;border-bottom:1px solid var(--borde);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--borde);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.hora{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:600;white-space:nowrap}
+.vacio{padding:40px 20px;text-align:center;color:var(--suave)}
+.critico{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:var(--real);border:1px solid var(--real);border-radius:3px;padding:0 5px;vertical-align:1px}
+.estado{display:inline-block;border-radius:4px;padding:2px 8px;font-size:13px;font-weight:600;white-space:nowrap}
+.e-real{background:var(--real-bg);color:var(--real)} .e-falso_positivo{background:var(--fp-bg);color:var(--fp)} .e-pendiente{background:var(--pend-bg);color:var(--suave)}
+.acciones{display:flex;gap:6px;justify-content:flex-end;white-space:nowrap}
+.acciones button{border:1px solid var(--borde);background:none;border-radius:4px;padding:4px 9px;cursor:pointer;font-size:13px}
+.acciones .a-real:hover{border-color:var(--real);color:var(--real)}
+.acciones .a-fp:hover{border-color:var(--fp);color:var(--fp)}
+.sin-cond{color:var(--real);font-size:13px}
+
+/* Diálogo */
+dialog{border:0;border-radius:10px;padding:0;width:min(560px,94vw);background:var(--superficie);color:var(--texto);box-shadow:0 20px 50px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(20,25,28,.55)}
+.dlg-cab{padding:16px 20px;border-bottom:1px solid var(--borde);display:flex;justify-content:space-between;align-items:center}
+.dlg-cab h2{margin:0;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:600}
+.dlg-cuerpo{padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.dlg-cuerpo .ancho{grid-column:1/-1}
+.dlg-pie{padding:14px 20px;border-top:1px solid var(--borde);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.cerrar{background:none;border:0;font-size:22px;cursor:pointer;color:var(--suave)}
+.segmento{display:flex;border:1px solid var(--borde);border-radius:6px;overflow:hidden}
+.segmento label{flex:1;text-align:center;padding:9px 6px;cursor:pointer;font-weight:600;font-size:14px;color:var(--suave);border-right:1px solid var(--borde)}
+.segmento label:last-child{border-right:0}
+.segmento input{position:absolute;opacity:0;pointer-events:none}
+.segmento input:focus-visible + span{outline:3px solid var(--linea);outline-offset:4px}
+.segmento label:has(input[value=pendiente]:checked){background:var(--pend-bg);color:var(--texto)}
+.segmento label:has(input[value=real]:checked){background:var(--real);color:#fff}
+.segmento label:has(input[value=falso_positivo]:checked){background:var(--fp);color:#fff}
+.error{background:var(--real-bg);color:var(--real);border-radius:6px;padding:10px 12px;font-size:14px;font-weight:500}
+.aviso-critico{background:var(--real-bg);color:var(--real);border-radius:6px;padding:8px 12px;font-size:13px;font-weight:600}
+
+/* Estadísticas */
+.grilla-est{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:18px;margin-top:18px}
+.panel{background:var(--superficie);border:1px solid var(--borde);border-radius:8px;padding:16px 18px;min-width:0}
+.panel h3{margin:0 0 12px;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:600}
+.panel table td,.panel table th{padding:7px 8px}
+.pct{display:flex;align-items:center;gap:8px;min-width:120px}
+.pct-barra{flex:1;height:8px;background:var(--pend-bg);border-radius:4px;overflow:hidden}
+.pct-barra i{display:block;height:100%;background:var(--fp)}
+.panel.ancho{grid-column:1/-1}
+.grafico-wrap{overflow-x:auto}
+.leyenda{display:flex;gap:16px;font-size:13px;color:var(--suave);margin-top:8px}
+.leyenda i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+td.r{text-align:right} th.r{text-align:right}
+
+/* Maestros */
+.dos-col{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:18px}
+.form-linea{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.form-linea .campo{flex:1;min-width:110px}
+.ayuda{font-size:13px;color:var(--suave);margin:4px 0 10px}
+.lista-scroll{max-height:420px;overflow:auto;border:1px solid var(--borde);border-radius:6px}
+
+/* Login y avisos */
+.login{max-width:380px;margin:12vh auto;background:var(--superficie);border:1px solid var(--borde);border-radius:10px;padding:28px;display:flex;flex-direction:column;gap:14px}
+.login h1{font-family:'Barlow Condensed',sans-serif;margin:0;font-size:30px}
+.login p{margin:0;color:var(--suave)}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--asfalto);color:#fff;padding:10px 18px;border-radius:6px;font-weight:500;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+@media (max-width:640px){ .dlg-cuerpo{grid-template-columns:1fr} header{gap:8px} .usuario{margin-left:0} }
+</style>
+</head>
+<body>
+
+<!-- =================== LOGIN =================== -->
+<div id="vistaLogin" hidden>
+  <form class="login" id="formLogin">
+    <h1>Eventos ADAS</h1>
+    <p>Ingresá con tu usuario de Petrosar.</p>
+    <label class="campo">Correo<input type="email" id="loginEmail" required autocomplete="username"></label>
+    <label class="campo">Contraseña<input type="password" id="loginPass" required autocomplete="current-password"></label>
+    <div id="loginError" class="error" hidden></div>
+    <button class="btn btn-primario" type="submit">Ingresar</button>
+  </form>
+</div>
+
+<!-- =================== APP =================== -->
+<div id="vistaApp" hidden>
+  <header>
+    <h1>Eventos ADAS</h1>
+    <nav role="tablist">
+      <button role="tab" data-tab="dia" aria-selected="true">Revisión del día</button>
+      <button role="tab" data-tab="pae" aria-selected="false">Inhabilitación PAE</button>
+      <button role="tab" data-tab="est" aria-selected="false">Estadísticas</button>
+      <button role="tab" data-tab="mae" aria-selected="false">Unidades y conductores</button>
+    </nav>
+    <div class="usuario"><span id="usuarioEmail"></span><button id="btnSalir">Salir</button></div>
+  </header>
+
+  <main>
+    <!-- ---------- REVISIÓN DEL DÍA ---------- -->
+    <section id="tab-dia">
+      <div class="barra">
+        <h2 class="fecha-titulo" id="diaTitulo"></h2>
+        <div class="fecha-nav">
+          <button id="diaAnt" aria-label="Día anterior">‹</button>
+          <input type="date" id="diaFecha" aria-label="Fecha">
+          <button id="diaSig" aria-label="Día siguiente">›</button>
+        </div>
+        <button class="btn" id="diaHoy">Hoy</button>
+        <select id="diaFiltroProv" aria-label="Filtrar por proveedor"><option value="">Ambos sistemas</option></select>
+        <button class="btn btn-primario derecha" id="btnNuevo">Cargar evento</button>
+      </div>
+
+      <div class="ruta">
+        <div class="ruta-datos">
+          <div class="dato"><b class="num" id="kTotal">0</b><span>eventos</span></div>
+          <div class="dato pend"><b class="num" id="kPend">0</b><span>sin revisar</span></div>
+          <div class="dato real"><b class="num" id="kReal">0</b><span>reales</span></div>
+          <div class="dato fp"><b class="num" id="kFp">0</b><span>falsos positivos</span></div>
+          <div class="dato"><b class="num" id="kPct">–</b><span>de falsos positivos</span></div>
+        </div>
+        <div class="carril" aria-hidden="true"><div class="s-real" id="sReal"></div><div class="s-fp" id="sFp"></div><div class="s-pend" id="sPend"></div></div>
+      </div>
+
+      <div class="tabla-wrap">
+        <table>
+          <thead><tr><th>Hora</th><th>Unidad</th><th>Sistema</th><th>Evento</th><th>Conductor</th><th>Resultado</th><th></th></tr></thead>
+          <tbody id="tbDia"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- PAE ---------- -->
+    <section id="tab-pae" hidden>
+      <div class="barra">
+        <h2 class="fecha-titulo">Inhabilitación PAE</h2>
+        <select id="paeFiltro" aria-label="Filtrar por estado">
+          <option value="activas">Pendientes, notificadas y vigentes</option>
+          <option value="">Todas</option>
+          <option value="pendiente">Pendientes</option>
+          <option value="notificada">Notificadas</option>
+          <option value="vigente">Vigentes</option>
+          <option value="cumplida">Cumplidas</option>
+          <option value="anulada">Anuladas</option>
+        </select>
+        <button class="btn derecha" id="paeCsv">Descargar CSV</button>
+      </div>
+      <div class="tabla-wrap">
+        <table>
+          <thead><tr><th>Fecha evento</th><th>Conductor</th><th>DNI</th><th>Infracción</th><th>Unidad</th><th>Estado</th><th>Desde</th><th>Hasta</th><th>Observación</th></tr></thead>
+          <tbody id="tbPae"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- ESTADÍSTICAS ---------- -->
+    <section id="tab-est" hidden>
+      <div class="barra">
+        <h2 class="fecha-titulo">Estadísticas</h2>
+        <label class="campo">Desde<input type="date" id="estDesde"></label>
+        <label class="campo">Hasta<input type="date" id="estHasta"></label>
+        <button class="btn" data-rango="7">7 días</button>
+        <button class="btn" data-rango="30">30 días</button>
+        <button class="btn" data-rango="mes">Este mes</button>
+      </div>
+      <div class="ruta">
+        <div class="ruta-datos">
+          <div class="dato"><b class="num" id="eTotal">0</b><span>eventos</span></div>
+          <div class="dato real"><b class="num" id="eReal">0</b><span>reales</span></div>
+          <div class="dato fp"><b class="num" id="eFp">0</b><span>falsos positivos</span></div>
+          <div class="dato"><b class="num" id="ePct">–</b><span>de falsos positivos</span></div>
+          <div class="dato pend"><b class="num" id="ePend">0</b><span>sin revisar</span></div>
+          <div class="dato real"><b class="num" id="eCrit">0</b><span>no negociables reales</span></div>
+        </div>
+      </div>
+      <div class="panel ancho">
+        <h3>Eventos por día</h3>
+        <div class="grafico-wrap" id="grafDias"></div>
+        <div class="leyenda"><span><i style="background:var(--real)"></i>Reales</span><span><i style="background:var(--fp)"></i>Falsos positivos</span><span><i style="background:var(--pend)"></i>Sin revisar</span></div>
+      </div>
+      <div class="grilla-est">
+        <div class="panel"><h3>Por sistema</h3><div id="estProv"></div></div>
+        <div class="panel"><h3>Por tipo de evento</h3><div id="estTipo"></div></div>
+        <div class="panel"><h3>Por unidad</h3><div id="estUnidad"></div></div>
+        <div class="panel"><h3>Motivos de falsos positivos</h3><div id="estMotivo"></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- MAESTROS ---------- -->
+    <section id="tab-mae" hidden>
+      <div class="dos-col">
+        <div class="panel">
+          <h3>Unidades</h3>
+          <form class="form-linea" id="formUnidad">
+            <label class="campo">Interno<input type="text" id="uInterno" placeholder="PETROSAR 880" required></label>
+            <label class="campo">Patente<input type="text" id="uPatente"></label>
+            <label class="campo">Sistema<select id="uProv"></select></label>
+            <button class="btn btn-primario" type="submit">Agregar unidad</button>
+          </form>
+          <div class="lista-scroll"><table><thead><tr><th>Interno</th><th>Patente</th><th>Sistema</th><th>Activa</th></tr></thead><tbody id="tbUnidades"></tbody></table></div>
+        </div>
+        <div class="panel">
+          <h3>Conductores</h3>
+          <form class="form-linea" id="formCond">
+            <label class="campo">DNI<input type="text" id="cDni" inputmode="numeric" required></label>
+            <label class="campo">Apellido<input type="text" id="cApe" required></label>
+            <label class="campo">Nombre<input type="text" id="cNom" required></label>
+            <button class="btn btn-primario" type="submit">Agregar conductor</button>
+          </form>
+          <details style="margin-bottom:12px">
+            <summary style="cursor:pointer;font-weight:500">Cargar varios pegando desde Excel</summary>
+            <p class="ayuda">Una fila por conductor, columnas DNI, Apellido y Nombre (separadas por tabulación, punto y coma o coma). Si el DNI ya existe, se actualiza el nombre.</p>
+            <textarea id="cMasivo" rows="6" style="width:100%" placeholder="30123456	PÉREZ	JUAN"></textarea>
+            <button class="btn" id="btnMasivo" style="margin-top:8px">Importar conductores</button>
+          </details>
+          <input type="text" id="cBuscar" placeholder="Buscar por apellido o DNI" style="width:100%;margin-bottom:8px">
+          <div class="lista-scroll"><table><thead><tr><th>DNI</th><th>Apellido y nombre</th><th>Activo</th></tr></thead><tbody id="tbConductores"></tbody></table></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- =================== DIÁLOGO DE EVENTO =================== -->
+<dialog id="dlgEvento">
+  <form id="formEvento" method="dialog">
+    <div class="dlg-cab"><h2 id="dlgTitulo">Cargar evento</h2><button type="button" class="cerrar" id="dlgCerrar" aria-label="Cerrar">×</button></div>
+    <div class="dlg-cuerpo">
+      <label class="campo">Fecha<input type="date" id="evFecha" required></label>
+      <label class="campo">Hora<input type="time" id="evHora" required></label>
+      <label class="campo">Sistema<select id="evProv" required></select></label>
+      <label class="campo">Unidad<select id="evUnidad" required></select></label>
+      <label class="campo ancho">Evento<select id="evTipo" required></select></label>
+      <div id="evAvisoCritico" class="aviso-critico ancho" hidden>Evento no negociable: si es real, va directo a inhabilitación PAE y el conductor es obligatorio.</div>
+      <label class="campo ancho">Conductor<input type="text" id="evCond" list="dlConductores" placeholder="Apellido o DNI" autocomplete="off"></label>
+      <datalist id="dlConductores"></datalist>
+      <div class="ancho">
+        <div class="campo" style="margin-bottom:4px">Resultado de la revisión</div>
+        <div class="segmento" role="radiogroup">
+          <label><input type="radio" name="evRes" value="pendiente"><span>Sin revisar</span></label>
+          <label><input type="radio" name="evRes" value="real"><span>Real</span></label>
+          <label><input type="radio" name="evRes" value="falso_positivo"><span>Falso positivo</span></label>
+        </div>
+      </div>
+      <label class="campo ancho" id="evMotivoWrap" hidden>Motivo del falso positivo<select id="evMotivo"></select></label>
+      <label class="campo ancho">Observación<textarea id="evObs"></textarea></label>
+      <div id="evError" class="error ancho" hidden></div>
+    </div>
+    <div class="dlg-pie">
+      <button type="button" class="btn" id="evOtro">Guardar y cargar otro</button>
+      <button type="submit" class="btn btn-primario" id="evGuardar">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+/* =====================================================================
+   CONFIGURACIÓN: pegar acá los datos del proyecto Supabase de ADAS
+   (Supabase > Project Settings > API)
+   ===================================================================== */
+const SUPABASE_URL = 'https://kvmcspctrtnbjyognrfe.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2bWNzcGN0cnRuYmp5b2ducmZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1MTE5NDgsImV4cCI6MjEwMTA4Nzk0OH0.1_DO5QCwyN8HZhC-xVjrEkE1vrdnak2CXa9w5hGnJic';
+
+const TZ = 'America/Argentina/Buenos_Aires';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const RES_TXT = { pendiente:'Sin revisar', real:'Real', falso_positivo:'Falso positivo' };
+
+const S = { user:null, prov:[], tipos:[], motivos:[], unidades:[], conductores:[], eventosDia:[], editId:null };
+
+/* ---------- Utilidades de fecha (Argentina, UTC-3) ---------- */
+const hoyAR = () => new Date(Date.now() - 3*3600e3).toISOString().slice(0,10);
+const sumarDias = (f, n) => { const d = new Date(f + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0,10); };
+const horaAR = ts => new Date(ts).toLocaleTimeString('es-AR', { timeZone:TZ, hour:'2-digit', minute:'2-digit', hourCycle:'h23' });
+const fechaAR = ts => new Date(ts).toLocaleDateString('en-CA', { timeZone:TZ });
+const fechaLarga = f => new Date(f + 'T12:00:00Z').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long', timeZone:'UTC' });
+const fechaCorta = f => f ? f.split('-').reverse().join('/') : '';
+const pct = (a, b) => b ? Math.round(1000 * a / b) / 10 : null;
+
+function toast(msg) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; t.setAttribute('role','status');
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2600);
+}
+function errMsg(e) {
+  if (!e) return 'Error desconocido';
+  if (e.code === '23505') return 'Ese evento ya está cargado (misma unidad, fecha, hora y tipo).';
+  return e.message || String(e);
+}
+async function fetchAll(builder) {
+  let out = [], from = 0; const size = 1000;
+  while (true) {
+    const { data, error } = await builder().range(from, from + size - 1);
+    if (error) throw error;
+    out = out.concat(data); if (data.length < size) break; from += size;
+  }
+  return out;
+}
+
+/* ---------- Sesión ---------- */
+async function iniciar() {
+  if (SUPABASE_URL.includes('TU-PROYECTO')) {
+    document.body.innerHTML = '<div class="login"><h1>Falta configurar</h1><p>Abrí este archivo y completá SUPABASE_URL y SUPABASE_ANON_KEY con los datos del proyecto de ADAS (Project Settings &gt; API).</p></div>';
+    return;
+  }
+  const { data } = await sb.auth.getSession();
+  data.session ? await entrar(data.session.user) : mostrarLogin();
+}
+function mostrarLogin() { $('vistaApp').hidden = true; $('vistaLogin').hidden = false; }
+async function entrar(user) {
+  S.user = user; $('usuarioEmail').textContent = user.email;
+  $('vistaLogin').hidden = true; $('vistaApp').hidden = false;
+  await cargarCatalogos();
+  $('diaFecha').value = hoyAR();
+  await cargarDia();
+}
+$('formLogin').addEventListener('submit', async e => {
+  e.preventDefault(); $('loginError').hidden = true;
+  const { data, error } = await sb.auth.signInWithPassword({ email:$('loginEmail').value.trim(), password:$('loginPass').value });
+  if (error) { $('loginError').textContent = 'Correo o contraseña incorrectos.'; $('loginError').hidden = false; return; }
+  entrar(data.user);
+});
+$('btnSalir').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+
+/* ---------- Catálogos ---------- */
+async function cargarCatalogos() {
+  const [p, t, m, u, c] = await Promise.all([
+    sb.from('proveedores').select('*').order('nombre'),
+    sb.from('tipos_evento').select('*').eq('activo', true).order('no_negociable', { ascending:false }).order('nombre'),
+    sb.from('motivos_falso_positivo').select('*').eq('activo', true).order('id'),
+    sb.from('unidades').select('*').order('interno'),
+    fetchAll(() => sb.from('conductores').select('*').order('apellido').order('nombre')).then(data => ({ data }))
+  ]);
+  for (const r of [p, t, m, u]) if (r.error) { toast(errMsg(r.error)); }
+  S.prov = p.data || []; S.tipos = t.data || []; S.motivos = m.data || []; S.unidades = u.data || []; S.conductores = c.data || [];
+
+  const opsProv = S.prov.map(x => `<option value="${x.id}">${esc(x.nombre)}</option>`).join('');
+  $('evProv').innerHTML = opsProv;
+  $('uProv').innerHTML = opsProv;
+  $('diaFiltroProv').innerHTML = '<option value="">Ambos sistemas</option>' + opsProv;
+  $('evTipo').innerHTML = S.tipos.map(x => `<option value="${x.id}">${esc(x.nombre)}${x.no_negociable ? ' (no negociable)' : ''}</option>`).join('');
+  $('evMotivo').innerHTML = '<option value="">Elegí un motivo</option>' + S.motivos.map(x => `<option value="${x.id}">${esc(x.descripcion)}</option>`).join('');
+  $('dlConductores').innerHTML = S.conductores.filter(x => x.activo).map(x => `<option value="${esc(etiquetaCond(x))}">`).join('');
+  pintarMaestros();
+}
+const etiquetaCond = c => `${c.apellido}, ${c.nombre} (${c.dni})`;
+function resolverConductor(txt) {
+  txt = txt.trim(); if (!txt) return null;
+  const porEtiqueta = S.conductores.find(c => etiquetaCond(c) === txt);
+  if (porEtiqueta) return porEtiqueta.id;
+  const soloNum = txt.replace(/\D/g, '');
+  const porDni = soloNum && S.conductores.find(c => c.dni.replace(/\D/g, '') === soloNum);
+  return porDni ? porDni.id : undefined; // undefined = no encontrado
+}
+function opcionesUnidad(provId, seleccion) {
+  const lista = S.unidades.filter(u => (u.activa || u.id === seleccion) && (!u.proveedor_id || u.proveedor_id == provId));
+  $('evUnidad').innerHTML = lista.length
+    ? lista.map(u => `<option value="${u.id}" ${u.id === seleccion ? 'selected' : ''}>${esc(u.interno)}</option>`).join('')
+    : '<option value="">No hay unidades para este sistema</option>';
+}
+
+/* ---------- Revisión del día ---------- */
+async function cargarDia() {
+  const f = $('diaFecha').value;
+  $('diaTitulo').textContent = f === hoyAR() ? 'Hoy, ' + fechaLarga(f) : fechaLarga(f);
+  let q = sb.from('eventos')
+    .select('*, unidades(interno), proveedores(nombre), tipos_evento(nombre,no_negociable), conductores(apellido,nombre,dni), motivos_falso_positivo(descripcion)')
+    .gte('fecha_hora', `${f}T00:00:00-03:00`).lte('fecha_hora', `${f}T23:59:59.999-03:00`)
+    .order('fecha_hora', { ascending:false });
+  if ($('diaFiltroProv').value) q = q.eq('proveedor_id', $('diaFiltroProv').value);
+  const { data, error } = await q;
+  if (error) { toast(errMsg(error)); return; }
+  S.eventosDia = data; pintarDia();
+}
+function pintarDia() {
+  const ev = S.eventosDia, tot = ev.length;
+  const n = r => ev.filter(e => e.resultado === r).length;
+  const real = n('real'), fp = n('falso_positivo'), pend = n('pendiente');
+  $('kTotal').textContent = tot; $('kReal').textContent = real; $('kFp').textContent = fp; $('kPend').textContent = pend;
+  const p = pct(fp, real + fp); $('kPct').textContent = p === null ? '–' : p + '%';
+  $('sReal').style.width = tot ? (100*real/tot) + '%' : '0';
+  $('sFp').style.width = tot ? (100*fp/tot) + '%' : '0';
+  $('sPend').style.width = tot ? (100*pend/tot) + '%' : '0';
+
+  $('tbDia').innerHTML = tot ? ev.map(e => {
+    const crit = e.tipos_evento?.no_negociable;
+    const cond = e.conductores ? esc(`${e.conductores.apellido}, ${e.conductores.nombre}`) : (crit ? '<span class="sin-cond">Sin asignar</span>' : '<span style="color:var(--suave)">–</span>');
+    const detalle = e.resultado === 'falso_positivo' && e.motivos_falso_positivo ? `<div style="font-size:12px;color:var(--suave)">${esc(e.motivos_falso_positivo.descripcion)}</div>` : '';
+    return `<tr>
+      <td class="hora">${horaAR(e.fecha_hora)}</td>
+      <td>${esc(e.unidades?.interno)}</td>
+      <td>${esc(e.proveedores?.nombre)}</td>
+      <td>${esc(e.tipos_evento?.nombre)}${crit ? '<span class="critico">No negociable</span>' : ''}</td>
+      <td>${cond}</td>
+      <td><span class="estado e-${e.resultado}">${RES_TXT[e.resultado]}</span>${detalle}</td>
+      <td><div class="acciones">
+        <button class="a-real" data-accion="real" data-id="${e.id}">Real</button>
+        <button class="a-fp" data-accion="fp" data-id="${e.id}">Falso positivo</button>
+        <button data-accion="editar" data-id="${e.id}">Editar</button>
+      </div></td></tr>`;
+  }).join('') : '<tr><td colspan="7" class="vacio">No hay eventos cargados para este día. Usá "Cargar evento" para agregar los que figuran en Callamp y RSV.</td></tr>';
+}
+$('tbDia').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-accion]'); if (!b) return;
+  const ev = S.eventosDia.find(x => x.id == b.dataset.id); if (!ev) return;
+  if (b.dataset.accion === 'editar') return abrirDialogo(ev);
+  if (b.dataset.accion === 'fp') return abrirDialogo(ev, 'falso_positivo');
+  if (b.dataset.accion === 'real') {
+    if (ev.tipos_evento?.no_negociable && !ev.conductor_id) return abrirDialogo(ev, 'real', 'Asigná el conductor para confirmar este evento como real.');
+    const { error } = await sb.from('eventos').update({ resultado:'real', motivo_fp_id:null, revisado_por:S.user.email }).eq('id', ev.id);
+    if (error) return toast(errMsg(error));
+    toast(ev.tipos_evento?.no_negociable ? 'Marcado como real y cargado en inhabilitación PAE' : 'Marcado como real');
+    cargarDia();
+  }
+});
+$('diaFecha').onchange = cargarDia;
+$('diaFiltroProv').onchange = cargarDia;
+$('diaAnt').onclick = () => { $('diaFecha').value = sumarDias($('diaFecha').value, -1); cargarDia(); };
+$('diaSig').onclick = () => { $('diaFecha').value = sumarDias($('diaFecha').value, 1); cargarDia(); };
+$('diaHoy').onclick = () => { $('diaFecha').value = hoyAR(); cargarDia(); };
+
+/* ---------- Diálogo de evento ---------- */
+function setResultado(v) { document.querySelector(`input[name=evRes][value=${v}]`).checked = true; actualizarDialogo(); }
+function getResultado() { return document.querySelector('input[name=evRes]:checked')?.value || 'pendiente'; }
+function actualizarDialogo() {
+  $('evMotivoWrap').hidden = getResultado() !== 'falso_positivo';
+  const tipo = S.tipos.find(t => t.id == $('evTipo').value);
+  $('evAvisoCritico').hidden = !tipo?.no_negociable;
+}
+function abrirDialogo(ev, forzarRes, mensaje) {
+  S.editId = ev ? ev.id : null;
+  $('dlgTitulo').textContent = ev ? 'Editar evento' : 'Cargar evento';
+  $('evOtro').hidden = !!ev;
+  $('evError').hidden = !mensaje; $('evError').textContent = mensaje || '';
+  if (ev) {
+    $('evFecha').value = fechaAR(ev.fecha_hora); $('evHora').value = horaAR(ev.fecha_hora);
+    $('evProv').value = ev.proveedor_id; opcionesUnidad(ev.proveedor_id, ev.unidad_id);
+    $('evTipo').value = ev.tipo_evento_id;
+    const c = S.conductores.find(x => x.id === ev.conductor_id); $('evCond').value = c ? etiquetaCond(c) : '';
+    $('evMotivo').value = ev.motivo_fp_id || ''; $('evObs').value = ev.observacion || '';
+    setResultado(forzarRes || ev.resultado);
+  } else {
+    $('evFecha').value = $('diaFecha').value; $('evHora').value = '';
+    if ($('diaFiltroProv').value) $('evProv').value = $('diaFiltroProv').value;
+    opcionesUnidad($('evProv').value);
+    $('evCond').value = ''; $('evMotivo').value = ''; $('evObs').value = '';
+    setResultado('pendiente');
+  }
+  $('dlgEvento').showModal();
+  if (forzarRes === 'falso_positivo') $('evMotivo').focus();
+  else if (forzarRes === 'real') $('evCond').focus();
+  else if (!ev) $('evHora').focus();
+}
+$('btnNuevo').onclick = () => abrirDialogo(null);
+$('dlgCerrar').onclick = () => $('dlgEvento').close();
+$('evProv').onchange = () => opcionesUnidad($('evProv').value);
+$('evTipo').onchange = actualizarDialogo;
+document.querySelectorAll('input[name=evRes]').forEach(r => r.onchange = actualizarDialogo);
+
+async function guardarEvento(otro) {
+  const err = m => { $('evError').textContent = m; $('evError').hidden = false; };
+  $('evError').hidden = true;
+  if (!$('evFecha').value || !$('evHora').value) return err('Completá la fecha y la hora del evento.');
+  if (!$('evUnidad').value) return err('Elegí la unidad.');
+  const condId = resolverConductor($('evCond').value);
+  if (condId === undefined) return err('Ese conductor no está en el padrón. Cargalo en "Unidades y conductores" o dejá el campo vacío.');
+  const res = getResultado();
+  const tipo = S.tipos.find(t => t.id == $('evTipo').value);
+  if (res === 'falso_positivo' && !$('evMotivo').value) return err('Elegí el motivo del falso positivo.');
+  if (res === 'real' && tipo?.no_negociable && !condId) return err('Evento no negociable confirmado como real: el conductor es obligatorio.');
+
+  const fila = {
+    fecha_hora: `${$('evFecha').value}T${$('evHora').value}:00-03:00`,
+    proveedor_id: +$('evProv').value, unidad_id: +$('evUnidad').value, tipo_evento_id: +$('evTipo').value,
+    conductor_id: condId, resultado: res,
+    motivo_fp_id: res === 'falso_positivo' ? +$('evMotivo').value : null,
+    observacion: $('evObs').value.trim() || null,
+    revisado_por: res === 'pendiente' ? null : S.user.email
+  };
+  const { error } = S.editId
+    ? await sb.from('eventos').update(fila).eq('id', S.editId)
+    : await sb.from('eventos').insert(fila);
+  if (error) return err(errMsg(error));
+
+  toast(res === 'real' && tipo?.no_negociable ? 'Guardado y cargado en inhabilitación PAE' : 'Evento guardado');
+  if ($('evFecha').value !== $('diaFecha').value) $('diaFecha').value = $('evFecha').value;
+  await cargarDia();
+  if (otro) { // conserva fecha, sistema y unidad para cargar rápido
+    $('evHora').value = ''; $('evCond').value = ''; $('evObs').value = ''; $('evMotivo').value = '';
+    setResultado('pendiente'); $('evHora').focus();
+  } else $('dlgEvento').close();
+}
+$('formEvento').addEventListener('submit', e => { e.preventDefault(); guardarEvento(false); });
+$('evOtro').onclick = () => guardarEvento(true);
+
+/* ---------- Inhabilitación PAE ---------- */
+let paeDatos = [];
+async function cargarPae() {
+  let q = sb.from('v_inhabilitaciones_pae').select('*').order('fecha_evento', { ascending:false });
+  const f = $('paeFiltro').value;
+  if (f === 'activas') q = q.in('estado', ['pendiente','notificada','vigente']);
+  else if (f) q = q.eq('estado', f);
+  const { data, error } = await q;
+  if (error) return toast(errMsg(error));
+  paeDatos = data;
+  const estados = ['pendiente','notificada','vigente','cumplida','anulada'];
+  $('tbPae').innerHTML = data.length ? data.map(r => `<tr data-id="${r.id}">
+    <td class="hora">${fechaCorta(fechaAR(r.fecha_evento))} ${horaAR(r.fecha_evento)}</td>
+    <td>${esc(r.conductor)}</td><td>${esc(r.dni)}</td>
+    <td>${esc(r.infraccion)}</td><td>${esc(r.unidad)}</td>
+    <td><select data-campo="estado">${estados.map(s => `<option ${s === r.estado ? 'selected' : ''} value="${s}">${s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select></td>
+    <td><input type="date" data-campo="fecha_inicio" value="${r.fecha_inicio || ''}"></td>
+    <td><input type="date" data-campo="fecha_fin" value="${r.fecha_fin || ''}"></td>
+    <td><input type="text" data-campo="observacion" value="${esc(r.observacion)}" style="min-width:180px"></td>
+  </tr>`).join('') : '<tr><td colspan="9" class="vacio">No hay inhabilitaciones con este filtro.</td></tr>';
+}
+$('tbPae').addEventListener('change', async e => {
+  const campo = e.target.dataset.campo; if (!campo) return;
+  const id = e.target.closest('tr').dataset.id;
+  const { error } = await sb.from('inhabilitaciones_pae').update({ [campo]: e.target.value || null }).eq('id', id);
+  error ? toast(errMsg(error)) : toast('Inhabilitación actualizada');
+});
+$('paeFiltro').onchange = cargarPae;
+$('paeCsv').onclick = () => {
+  const cab = ['Fecha evento','Conductor','DNI','Infracción','Unidad','Sistema','Estado','Desde','Hasta','Observación'];
+  const filas = paeDatos.map(r => [`${fechaCorta(fechaAR(r.fecha_evento))} ${horaAR(r.fecha_evento)}`, r.conductor, r.dni, r.infraccion, r.unidad, r.proveedor, r.estado, fechaCorta(r.fecha_inicio), fechaCorta(r.fecha_fin), r.observacion || '']);
+  const csv = [cab, ...filas].map(f => f.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type:'text/csv;charset=utf-8' }));
+  a.download = `inhabilitaciones_PAE_${hoyAR()}.csv`; a.click();
+};
+
+/* ---------- Estadísticas ---------- */
+function rango(tipo) {
+  const h = hoyAR();
+  $('estHasta').value = h;
+  $('estDesde').value = tipo === 'mes' ? h.slice(0,8) + '01' : sumarDias(h, -(+tipo - 1));
+  cargarEst();
+}
+document.querySelectorAll('[data-rango]').forEach(b => b.onclick = () => rango(b.dataset.rango));
+$('estDesde').onchange = cargarEst; $('estHasta').onchange = cargarEst;
+
+async function cargarEst() {
+  const d = $('estDesde').value, h = $('estHasta').value; if (!d || !h) return;
+  let ev;
+  try {
+    ev = await fetchAll(() => sb.from('eventos')
+      .select('fecha_hora, resultado, unidades(interno), proveedores(nombre), tipos_evento(nombre,no_negociable), motivos_falso_positivo(descripcion)')
+      .gte('fecha_hora', `${d}T00:00:00-03:00`).lte('fecha_hora', `${h}T23:59:59.999-03:00`).order('fecha_hora'));
+  } catch (e) { return toast(errMsg(e)); }
+
+  const cuenta = arr => ({ t:arr.length, r:arr.filter(e => e.resultado === 'real').length, f:arr.filter(e => e.resultado === 'falso_positivo').length, p:arr.filter(e => e.resultado === 'pendiente').length });
+  const tot = cuenta(ev);
+  $('eTotal').textContent = tot.t; $('eReal').textContent = tot.r; $('eFp').textContent = tot.f; $('ePend').textContent = tot.p;
+  const p = pct(tot.f, tot.r + tot.f); $('ePct').textContent = p === null ? '–' : p + '%';
+  $('eCrit').textContent = ev.filter(e => e.resultado === 'real' && e.tipos_evento?.no_negociable).length;
+
+  const agrupar = (clave) => {
+    const m = new Map();
+    ev.forEach(e => { const k = clave(e) || 'Sin dato'; if (!m.has(k)) m.set(k, []); m.get(k).push(e); });
+    return [...m.entries()].map(([k, arr]) => ({ k, ...cuenta(arr) }));
+  };
+  const tablaGrupo = (filas, titulo) => {
+    if (!filas.length) return '<p class="vacio">Sin datos en el período.</p>';
+    filas.sort((a, b) => b.f - a.f || b.t - a.t);
+    return `<div class="tabla-wrap" style="border:0"><table><thead><tr><th>${titulo}</th><th class="r">Total</th><th class="r">Reales</th><th class="r">Falsos</th><th>% falsos</th></tr></thead><tbody>${
+      filas.map(x => { const pc = pct(x.f, x.r + x.f); return `<tr><td>${esc(x.k)}</td><td class="r num">${x.t}</td><td class="r num">${x.r}</td><td class="r num">${x.f}</td>
+      <td><div class="pct"><div class="pct-barra"><i style="width:${pc || 0}%"></i></div><span class="num">${pc === null ? '–' : pc + '%'}</span></div></td></tr>`; }).join('')
+    }</tbody></table></div>`;
+  };
+  $('estProv').innerHTML = tablaGrupo(agrupar(e => e.proveedores?.nombre), 'Sistema');
+  $('estTipo').innerHTML = tablaGrupo(agrupar(e => e.tipos_evento?.nombre), 'Evento');
+  $('estUnidad').innerHTML = tablaGrupo(agrupar(e => e.unidades?.interno), 'Unidad');
+
+  const mot = new Map();
+  ev.filter(e => e.resultado === 'falso_positivo').forEach(e => { const k = `${e.motivos_falso_positivo?.descripcion || 'Sin motivo'}|${e.proveedores?.nombre}`; mot.set(k, (mot.get(k) || 0) + 1); });
+  const motFilas = [...mot.entries()].sort((a, b) => b[1] - a[1]);
+  $('estMotivo').innerHTML = motFilas.length ? `<table><thead><tr><th>Motivo</th><th>Sistema</th><th class="r">Cantidad</th></tr></thead><tbody>${
+    motFilas.map(([k, n]) => { const [m, pr] = k.split('|'); return `<tr><td>${esc(m)}</td><td>${esc(pr)}</td><td class="r num">${n}</td></tr>`; }).join('')}</tbody></table>`
+    : '<p class="vacio">No hay falsos positivos en el período.</p>';
+
+  // Gráfico por día
+  const dias = []; for (let f = d; f <= h; f = sumarDias(f, 1)) dias.push(f);
+  const porDia = dias.map(f => cuenta(ev.filter(e => fechaAR(e.fecha_hora) === f)));
+  const max = Math.max(1, ...porDia.map(x => x.t));
+  const bw = 22, gap = 8, alto = 160, W = Math.max(600, dias.length * (bw + gap) + 40);
+  let svg = `<svg viewBox="0 0 ${W} ${alto + 40}" width="${W}" height="${alto + 40}" role="img" aria-label="Eventos por día">`;
+  dias.forEach((f, i) => {
+    const x = 30 + i * (bw + gap); let y = alto; const c = porDia[i];
+    [['r','var(--real)'],['f','var(--fp)'],['p','var(--pend)']].forEach(([k, col]) => {
+      const hh = c[k] / max * (alto - 20); if (hh > 0) { y -= hh; svg += `<rect x="${x}" y="${y}" width="${bw}" height="${hh}" fill="${col}"><title>${fechaCorta(f)}: ${c[k]}</title></rect>`; }
+    });
+    if (c.t) svg += `<text x="${x + bw/2}" y="${y - 4}" text-anchor="middle" font-size="11" fill="var(--suave)">${c.t}</text>`;
+    if (dias.length <= 31 || i % 2 === 0) svg += `<text x="${x + bw/2}" y="${alto + 16}" text-anchor="middle" font-size="11" fill="var(--suave)">${f.slice(8)}/${f.slice(5,7)}</text>`;
+  });
+  svg += `<line x1="24" x2="${W}" y1="${alto}" y2="${alto}" stroke="var(--borde)"/></svg>`;
+  $('grafDias').innerHTML = svg;
+}
+
+/* ---------- Unidades y conductores ---------- */
+function pintarMaestros() {
+  $('tbUnidades').innerHTML = S.unidades.length ? S.unidades.map(u => `<tr>
+    <td>${esc(u.interno)}</td><td>${esc(u.patente)}</td>
+    <td>${esc(S.prov.find(p => p.id === u.proveedor_id)?.nombre || '–')}</td>
+    <td><input type="checkbox" data-tabla="unidades" data-campo="activa" data-id="${u.id}" ${u.activa ? 'checked' : ''} aria-label="Unidad activa"></td></tr>`).join('')
+    : '<tr><td colspan="4" class="vacio">Todavía no hay unidades. Agregá las de Callamp y RSV para poder cargar eventos.</td></tr>';
+  pintarConductores();
+}
+function pintarConductores() {
+  const b = $('cBuscar').value.trim().toLowerCase();
+  const lista = S.conductores.filter(c => !b || c.dni.includes(b) || `${c.apellido} ${c.nombre}`.toLowerCase().includes(b));
+  $('tbConductores').innerHTML = lista.length ? lista.slice(0, 300).map(c => `<tr>
+    <td>${esc(c.dni)}</td><td>${esc(c.apellido)}, ${esc(c.nombre)}</td>
+    <td><input type="checkbox" data-tabla="conductores" data-campo="activo" data-id="${c.id}" ${c.activo ? 'checked' : ''} aria-label="Conductor activo"></td></tr>`).join('')
+    : '<tr><td colspan="3" class="vacio">Sin conductores cargados.</td></tr>';
+}
+$('cBuscar').oninput = pintarConductores;
+document.getElementById('tab-mae').addEventListener('change', async e => {
+  const t = e.target; if (!t.dataset.tabla) return;
+  const { error } = await sb.from(t.dataset.tabla).update({ [t.dataset.campo]: t.checked }).eq('id', t.dataset.id);
+  if (error) { toast(errMsg(error)); t.checked = !t.checked; return; }
+  await cargarCatalogos();
+});
+$('formUnidad').addEventListener('submit', async e => {
+  e.preventDefault();
+  const { error } = await sb.from('unidades').insert({ interno:$('uInterno').value.trim().toUpperCase(), patente:$('uPatente').value.trim().toUpperCase() || null, proveedor_id:+$('uProv').value });
+  if (error) return toast(error.code === '23505' ? 'Esa unidad ya existe.' : errMsg(error));
+  $('uInterno').value = ''; $('uPatente').value = ''; toast('Unidad agregada'); cargarCatalogos();
+});
+$('formCond').addEventListener('submit', async e => {
+  e.preventDefault();
+  const { error } = await sb.from('conductores').insert({ dni:$('cDni').value.replace(/\D/g,''), apellido:$('cApe').value.trim().toUpperCase(), nombre:$('cNom').value.trim().toUpperCase() });
+  if (error) return toast(error.code === '23505' ? 'Ya hay un conductor con ese DNI.' : errMsg(error));
+  $('cDni').value = ''; $('cApe').value = ''; $('cNom').value = ''; toast('Conductor agregado'); cargarCatalogos();
+});
+$('btnMasivo').onclick = async () => {
+  const filas = $('cMasivo').value.split(/\r?\n/).map(l => l.split(/\t|;|,/).map(s => s.trim())).filter(f => f.length >= 3 && f[0].replace(/\D/g,''));
+  if (!filas.length) return toast('No encontré filas válidas (DNI, Apellido, Nombre).');
+  const datos = [...new Map(filas.map(f => [f[0].replace(/\D/g,''), { dni:f[0].replace(/\D/g,''), apellido:f[1].toUpperCase(), nombre:f[2].toUpperCase() }])).values()];
+  const { error } = await sb.from('conductores').upsert(datos, { onConflict:'dni' });
+  if (error) return toast(errMsg(error));
+  $('cMasivo').value = ''; toast(`${datos.length} conductores importados`); cargarCatalogos();
+};
+
+/* ---------- Pestañas ---------- */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.setAttribute('aria-selected', x === b));
+  ['dia','pae','est','mae'].forEach(t => $('tab-' + t).hidden = t !== b.dataset.tab);
+  if (b.dataset.tab === 'dia') cargarDia();
+  if (b.dataset.tab === 'pae') cargarPae();
+  if (b.dataset.tab === 'est') { if (!$('estDesde').value) rango('30'); else cargarEst(); }
+});
+
+iniciar();
+</script>
+</body>
+</html>
